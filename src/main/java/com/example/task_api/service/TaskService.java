@@ -41,6 +41,73 @@ public class TaskService {
                 .collect(Collectors.toList());
     }
 
+    public TaskResponseDTO getTaskById(String id) {
+
+        Task task = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Task not found with id: " + id));
+
+        return mapToResponse(task);
+    }
+
+    public String deleteTask(String id) {
+
+        boolean exists = repo.existsById(id);
+
+        if (!exists) {
+            throw new RuntimeException("Task not found with id: " + id);
+        }
+
+        repo.deleteById(id);
+
+        return "Task deleted successfully with id: " + id;
+    }
+
+    public TaskResponseDTO updateTask(String id, TaskRequestDTO dto) {
+
+        // 1️⃣ Fetch existing
+        Task task = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Task not found with id: " + id));
+
+        // 2️⃣ Update mutable fields only
+        task.setTitle(dto.getTitle());
+        task.setDescription(dto.getDescription());
+
+        // DO NOT change:
+        // task.setId(...)
+        // task.setCreatedAt(...)
+
+        // 3️⃣ Save updated document
+        Task updated = repo.save(task);
+
+        // 4️⃣ Return DTO
+        return mapToResponse(updated);
+    }
+
+    public List<TaskResponseDTO> searchByTitle(String keyword) {
+
+        List<Task> tasks = repo.findByTitleContainingIgnoreCase(keyword);
+
+        return tasks.stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public TaskResponseDTO markCompleted(String id) {
+
+        // fetch existing
+        Task task = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Task not found with id: " + id));
+
+        // partial update
+        task.setCompleted(true);
+
+        // save
+        Task updated = repo.save(task);
+
+        return mapToResponse(updated);
+    }
+
+
     // ✅ Manual mapper method (important for learning)
     private TaskResponseDTO mapToResponse(Task task) {
         return TaskResponseDTO.builder()

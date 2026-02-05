@@ -27,5 +27,35 @@ public class TaskController {
     public List<TaskResponseDTO> getAllTasks() {
         return service.getAllTasks();
     }
+
+    @GetMapping("/{id}")
+    public TaskResponseDTO getById(@PathVariable String id) {
+        return service.getTaskById(id);
+    }
+
+    @DeleteMapping("/{id}")
+    public String deleteTask(@PathVariable String id) {
+        return service.deleteTask(id);
+    }
+
+    @PutMapping("/{id}")
+    public TaskResponseDTO updateTask(
+            @PathVariable String id,
+            @Valid @RequestBody TaskRequestDTO dto) {
+
+        return service.updateTask(id, dto);
+    }
+
+    @GetMapping("/search")
+    public List<TaskResponseDTO> searchTasks(@RequestParam String keyword) {
+        return service.searchByTitle(keyword);
+    }
+
+    @PatchMapping("/{id}/complete")
+    public TaskResponseDTO markComplete(@PathVariable String id) {
+        return service.markCompleted(id);
+    }
+
+
 }
 
