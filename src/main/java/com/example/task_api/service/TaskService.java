@@ -6,6 +6,8 @@ import com.example.task_api.model.Task;
 import com.example.task_api.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.example.task_api.exception.CustomNotFoundException;
+
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -15,6 +17,8 @@ import java.util.stream.Collectors;
 public class TaskService {
 
     private final TaskRepository repo;
+
+
 
     // ✅ Create Task
     public TaskResponseDTO createTask(TaskRequestDTO dto) {
@@ -44,7 +48,7 @@ public class TaskService {
     public TaskResponseDTO getTaskById(String id) {
 
         Task task = repo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Task not found with id: " + id));
+                .orElseThrow(() -> new CustomNotFoundException("Task not found with id: " + id));
 
         return mapToResponse(task);
     }
@@ -54,8 +58,9 @@ public class TaskService {
         boolean exists = repo.existsById(id);
 
         if (!exists) {
-            throw new RuntimeException("Task not found with id: " + id);
+            throw new CustomNotFoundException("Task not found with id: " + id);
         }
+
 
         repo.deleteById(id);
 
@@ -66,7 +71,8 @@ public class TaskService {
 
         // 1️⃣ Fetch existing
         Task task = repo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Task not found with id: " + id));
+                .orElseThrow(() -> new CustomNotFoundException("Task not found with id: " + id));
+
 
         // 2️⃣ Update mutable fields only
         task.setTitle(dto.getTitle());
@@ -96,7 +102,8 @@ public class TaskService {
 
         // fetch existing
         Task task = repo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Task not found with id: " + id));
+                .orElseThrow(() -> new CustomNotFoundException("Task not found with id: " + id));
+
 
         // partial update
         task.setCompleted(true);
