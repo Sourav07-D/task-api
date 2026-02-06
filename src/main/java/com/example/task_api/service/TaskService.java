@@ -114,6 +114,42 @@ public class TaskService {
         return mapToResponse(updated);
     }
 
+    public boolean taskExists(String id) {
+        return repo.existsById(id);
+    }
+
+    public List<TaskResponseDTO> filterTasks(String keyword, Boolean completed) {
+
+        List<Task> tasks;
+
+        if (keyword != null && completed != null) {
+            // both filters present
+            tasks = repo.findByTitleContainingIgnoreCaseAndCompleted(keyword, completed);
+
+        } else if (keyword != null) {
+            // only keyword
+            tasks = repo.findByTitleContainingIgnoreCase(keyword);
+
+        } else if (completed != null) {
+            // only completed flag
+            tasks = completed
+                    ? repo.findByCompletedTrue()
+                    : repo.findByCompletedFalse();
+
+        } else {
+            // no filters
+            tasks = repo.findAll();
+        }
+
+        return tasks.stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public long getTaskCount() {
+        return repo.count();
+    }
+
 
     // ✅ Manual mapper method (important for learning)
     private TaskResponseDTO mapToResponse(Task task) {

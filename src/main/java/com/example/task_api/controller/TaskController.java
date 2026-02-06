@@ -67,6 +67,25 @@ public class TaskController {
         return ResponseEntity.ok(service.markCompleted(id));
     }
 
+    @GetMapping("/{id}/exists")
+    public ResponseEntity<Boolean> taskExists(@PathVariable String id) {
+        return ResponseEntity.ok(service.taskExists(id));
+    }
+    @GetMapping("/filter")
+    public ResponseEntity<List<TaskResponseDTO>> filterTasks(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Boolean completed) {
+
+        return ResponseEntity.ok(
+                service.filterTasks(keyword, completed)
+        );
+    }
+
+    @GetMapping("/count")
+    public ResponseEntity<Long> getTaskCount() {
+        return ResponseEntity.ok(service.getTaskCount());
+    }
+
 
 
 }
