@@ -1,5 +1,7 @@
 package com.example.task_api.controller;
 
+import com.example.task_api.constants.ApiMessages;
+import com.example.task_api.dto.ApiResponse;
 import com.example.task_api.dto.TaskRequestDTO;
 import com.example.task_api.dto.TaskResponseDTO;
 import com.example.task_api.service.TaskService;
@@ -20,70 +22,141 @@ public class TaskController {
 
     // ✅ Create Task
     @PostMapping
-    public ResponseEntity<TaskResponseDTO> createTask(
+    public  ResponseEntity<ApiResponse<TaskResponseDTO>> createTask(
             @Valid @RequestBody TaskRequestDTO dto) {
 
         TaskResponseDTO response = service.createTask(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                ApiResponse.<TaskResponseDTO>builder()
+                        .success(true)
+                        .message(ApiMessages.TASK_CREATED)
+                        .data(response)
+                        .build()
+        );
+
     }
 
 
     // ✅ Get All Tasks
     @GetMapping
-    public ResponseEntity<List<TaskResponseDTO>> getAllTasks() {
-        return ResponseEntity.ok(service.getAllTasks());
+    public ResponseEntity<ApiResponse<List<TaskResponseDTO>>> getAllTasks() {
+        return ResponseEntity.ok(
+                ApiResponse.<List<TaskResponseDTO>>builder()
+                        .success(true)
+                        .message(ApiMessages.TASKS_FETCHED)
+                        .data(service.getAllTasks())
+                        .build()
+        );
+
     }
 
 
     @GetMapping("/{id}")
-    public ResponseEntity<TaskResponseDTO> getById(@PathVariable String id) {
-        return ResponseEntity.ok(service.getTaskById(id));
+    public ResponseEntity<ApiResponse<TaskResponseDTO>> getById(@PathVariable String id) {
+        return ResponseEntity.ok(
+                ApiResponse.<TaskResponseDTO>builder()
+                        .success(true)
+                        .message(ApiMessages.TASK_FETCHED)
+                        .data(service.getTaskById(id))
+                        .build()
+        );
+
     }
 
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteTask(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<String>> deleteTask(@PathVariable String id) {
         service.deleteTask(id);
-        return ResponseEntity.noContent().build();
+
+        return ResponseEntity.ok(
+                ApiResponse.<String>builder()
+                        .success(true)
+                        .message(ApiMessages.TASK_DELETED)
+                        .data(null)
+                        .build()
+        );
+
     }
 
 
     @PutMapping("/{id}")
-    public ResponseEntity<TaskResponseDTO> updateTask(
+    public ResponseEntity<ApiResponse<TaskResponseDTO>> updateTask(
             @PathVariable String id,
             @Valid @RequestBody TaskRequestDTO dto) {
 
-        return ResponseEntity.ok(service.updateTask(id, dto));
+        return ResponseEntity.ok(
+                ApiResponse.<TaskResponseDTO>builder()
+                        .success(true)
+                        .message(ApiMessages.TASK_UPDATED)
+                        .data(service.updateTask(id, dto))
+                        .build()
+        );
+
     }
 
 
     @GetMapping("/search")
-    public List<TaskResponseDTO> searchTasks(@RequestParam String keyword) {
-        return service.searchByTitle(keyword);
+    public ResponseEntity<ApiResponse<List<TaskResponseDTO>>> searchTasks(
+            @RequestParam String keyword) {
+
+        return ResponseEntity.ok(
+                ApiResponse.<List<TaskResponseDTO>>builder()
+                        .success(true)
+                        .message(ApiMessages.TASKS_FETCHED)
+                        .data(service.searchByTitle(keyword))
+                        .build()
+        );
     }
 
+
     @PatchMapping("/{id}/complete")
-    public ResponseEntity<TaskResponseDTO> markComplete(@PathVariable String id) {
-        return ResponseEntity.ok(service.markCompleted(id));
+    public ResponseEntity<ApiResponse<TaskResponseDTO>> markComplete(@PathVariable String id) {
+        return ResponseEntity.ok(
+                ApiResponse.<TaskResponseDTO>builder()
+                        .success(true)
+                        .message(ApiMessages.TASK_MARKED_COMPLETE)
+                        .data(service.markCompleted(id))
+                        .build()
+        );
+
     }
 
     @GetMapping("/{id}/exists")
-    public ResponseEntity<Boolean> taskExists(@PathVariable String id) {
-        return ResponseEntity.ok(service.taskExists(id));
+    public ResponseEntity<ApiResponse<Boolean>> taskExists(@PathVariable String id) {
+        return ResponseEntity.ok(
+                ApiResponse.<Boolean>builder()
+                        .success(true)
+                        .message(ApiMessages.TASK_EXISTENCE_CHECKED)
+                        .data(service.taskExists(id))
+                        .build()
+        );
+
     }
     @GetMapping("/filter")
-    public ResponseEntity<List<TaskResponseDTO>> filterTasks(
+    public ResponseEntity<ApiResponse<List<TaskResponseDTO>>> filterTasks(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean completed) {
 
         return ResponseEntity.ok(
-                service.filterTasks(keyword, completed)
+                ApiResponse.<List<TaskResponseDTO>>builder()
+                        .success(true)
+                        .message(ApiMessages.TASK_FILTERED)
+                        .data(service.filterTasks(keyword, completed))
+                        .build()
         );
+
     }
 
     @GetMapping("/count")
-    public ResponseEntity<Long> getTaskCount() {
-        return ResponseEntity.ok(service.getTaskCount());
+    public ResponseEntity<ApiResponse<Long>> getTaskCount() {
+        return ResponseEntity.ok(
+                ApiResponse.<Long>builder()
+                        .success(true)
+                        .message(ApiMessages.TASK_COUNT_FETCHED)
+                        .data(service.getTaskCount())
+                        .build()
+        );
+
     }
 
 
