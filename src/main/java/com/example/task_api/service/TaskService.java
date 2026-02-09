@@ -2,6 +2,7 @@ package com.example.task_api.service;
 
 import com.example.task_api.dto.TaskRequestDTO;
 import com.example.task_api.dto.TaskResponseDTO;
+import com.example.task_api.dto.TaskUpdateDTO;
 import com.example.task_api.model.Task;
 import com.example.task_api.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,12 +13,17 @@ import com.example.task_api.exception.CustomNotFoundException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 @Service
 @RequiredArgsConstructor
 public class TaskService {
 
     private final TaskRepository repo;
 
+    private static final Logger log = LoggerFactory.getLogger(TaskService.class);
 
 
     // ✅ Create Task
@@ -67,7 +73,8 @@ public class TaskService {
         return "Task deleted successfully with id: " + id;
     }
 
-    public TaskResponseDTO updateTask(String id, TaskRequestDTO dto) {
+    public TaskResponseDTO updateTask(String id, TaskUpdateDTO dto) {
+        log.info("Updating task with id: {}", id);
 
         // 1️⃣ Fetch existing
         Task task = repo.findById(id)
@@ -75,18 +82,21 @@ public class TaskService {
 
 
         // 2️⃣ Update mutable fields only
-        task.setTitle(dto.getTitle());
-        task.setDescription(dto.getDescription());
+        if (dto.getTitle() != null) {
+            task.setTitle(dto.getTitle());
+        }
+
+        if (dto.getDescription() != null) {
+            task.setDescription(dto.getDescription());
+        }
 
         // DO NOT change:
         // task.setId(...)
         // task.setCreatedAt(...)
 
-        // 3️⃣ Save updated document
-        Task updated = repo.save(task);
+        Task saved = repo.save(task);
 
-        // 4️⃣ Return DTO
-        return mapToResponse(updated);
+        return mapToResponse(saved);
     }
 
     public List<TaskResponseDTO> searchByTitle(String keyword) {

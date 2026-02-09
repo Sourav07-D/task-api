@@ -4,6 +4,7 @@ import com.example.task_api.constants.ApiMessages;
 import com.example.task_api.dto.ApiResponse;
 import com.example.task_api.dto.TaskRequestDTO;
 import com.example.task_api.dto.TaskResponseDTO;
+import com.example.task_api.dto.TaskUpdateDTO;
 import com.example.task_api.service.TaskService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -82,13 +83,15 @@ public class TaskController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<TaskResponseDTO>> updateTask(
             @PathVariable String id,
-            @Valid @RequestBody TaskRequestDTO dto) {
+            @Valid @RequestBody TaskUpdateDTO dto) {
+
+        TaskResponseDTO updated = service.updateTask(id, dto);
 
         return ResponseEntity.ok(
                 ApiResponse.<TaskResponseDTO>builder()
                         .success(true)
                         .message(ApiMessages.TASK_UPDATED)
-                        .data(service.updateTask(id, dto))
+                        .data(updated)
                         .build()
         );
 
