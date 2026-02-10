@@ -1,10 +1,7 @@
 package com.example.task_api.controller;
 
 import com.example.task_api.constants.ApiMessages;
-import com.example.task_api.dto.ApiResponse;
-import com.example.task_api.dto.TaskRequestDTO;
-import com.example.task_api.dto.TaskResponseDTO;
-import com.example.task_api.dto.TaskUpdateDTO;
+import com.example.task_api.dto.*;
 import com.example.task_api.service.TaskService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -97,7 +94,6 @@ public class TaskController {
 
     }
 
-
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<List<TaskResponseDTO>>> searchTasks(
             @RequestParam String keyword) {
@@ -161,6 +157,56 @@ public class TaskController {
         );
 
     }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<TaskResponseDTO>> patchStatus(
+            @PathVariable String id,
+            @Valid @RequestBody TaskStatusPatchDTO dto) {
+
+        TaskResponseDTO updated = service.patchStatus(id, dto);
+
+        return ResponseEntity.ok(
+                ApiResponse.<TaskResponseDTO>builder()
+                        .success(true)
+                        .message("Task status updated successfully")
+                        .data(updated)
+                        .build()
+        );
+    }
+
+    @PatchMapping("/{id}/title")
+    public ResponseEntity<ApiResponse<TaskResponseDTO>> patchTitle(
+            @PathVariable String id,
+            @Valid @RequestBody TaskTitlePatchDTO dto) {
+
+        TaskResponseDTO updated = service.patchTitle(id, dto);
+
+        return ResponseEntity.ok(
+                ApiResponse.<TaskResponseDTO>builder()
+                        .success(true)
+                        .message("Task title updated successfully")
+                        .data(updated)
+                        .build()
+        );
+    }
+
+    @PatchMapping("/{id}/description")
+    public ResponseEntity<ApiResponse<TaskResponseDTO>> patchDescription(
+            @PathVariable String id,
+            @Valid @RequestBody TaskDescriptionPatchDTO dto) {
+
+        TaskResponseDTO updated = service.patchDescription(id, dto);
+
+        return ResponseEntity.ok(
+                ApiResponse.<TaskResponseDTO>builder()
+                        .success(true)
+                        .message("Task description updated successfully")
+                        .data(updated)
+                        .build()
+        );
+    }
+
+
 
 
 

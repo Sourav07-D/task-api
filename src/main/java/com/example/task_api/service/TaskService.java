@@ -1,8 +1,7 @@
 package com.example.task_api.service;
 
-import com.example.task_api.dto.TaskRequestDTO;
-import com.example.task_api.dto.TaskResponseDTO;
-import com.example.task_api.dto.TaskUpdateDTO;
+import com.example.task_api.dto.*;
+import com.example.task_api.exception.BadRequestException;
 import com.example.task_api.model.Task;
 import com.example.task_api.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
@@ -160,6 +159,60 @@ public class TaskService {
         return repo.count();
     }
 
+
+    public TaskResponseDTO patchStatus(String id, TaskStatusPatchDTO dto) {
+
+        log.info("Task status changed → id: {}", id);
+
+        Task task = repo.findById(id)
+                .orElseThrow(() ->
+                        new CustomNotFoundException("Task not found with id: " + id));
+
+        task.setCompleted(dto.getCompleted());
+
+        Task saved = repo.save(task);
+
+        return mapToResponse(saved);
+    }
+
+    public TaskResponseDTO patchTitle(String id, TaskTitlePatchDTO dto) {
+
+        log.info("Task title change requested → id: {}", id);
+
+        Task task = repo.findById(id)
+                .orElseThrow(() ->
+                        new CustomNotFoundException("Task not found with id: " + id));
+
+        // ✅ Business rule enforcement
+        if (task.isCompleted()) {
+            throw new BadRequestException(
+                    "Completed tasks cannot change title");
+        }
+
+        task.setTitle(dto.getTitle());
+
+        Task saved = repo.save(task);
+
+        log.info("Task title changed → id: {}", id);
+
+        return mapToResponse(saved);
+    }
+
+
+    public TaskResponseDTO patchDescription(String id, TaskDescriptionPatchDTO dto) {
+
+        log.info("Task description changed → id: {}", id);
+
+        Task task = repo.findById(id)
+                .orElseThrow(() ->
+                        new CustomNotFoundException("Task not found with id: " + id));
+
+        task.setDescription(dto.getDescription());
+
+        Task saved = repo.save(task);
+
+        return mapToResponse(saved);
+    }
 
     // ✅ Manual mapper method (important for learning)
     private TaskResponseDTO mapToResponse(Task task) {
