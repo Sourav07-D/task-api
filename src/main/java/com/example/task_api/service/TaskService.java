@@ -2,6 +2,7 @@ package com.example.task_api.service;
 
 import com.example.task_api.dto.*;
 import com.example.task_api.exception.BadRequestException;
+import com.example.task_api.mapper.TaskMapper;
 import com.example.task_api.model.Task;
 import com.example.task_api.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,7 +11,6 @@ import com.example.task_api.exception.CustomNotFoundException;
 
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,26 +28,19 @@ public class TaskService {
     // ✅ Create Task
     public TaskResponseDTO createTask(TaskRequestDTO dto) {
 
-        // DTO → Entity (manual mapping)
-        Task task = new Task();
-        task.setTitle(dto.getTitle());
-        task.setDescription(dto.getDescription());
-        task.setCompleted(false);   // force default
+        Task task = TaskMapper.fromCreateDTO(dto);
 
         // createdAt auto-set in entity
 
         Task saved = repo.save(task);
 
         // Entity → ResponseDTO
-        return mapToResponse(saved);
+        return TaskMapper.toResponseDTO(saved);
     }
 
     // ✅ Get All Tasks
     public List<TaskResponseDTO> getAllTasks() {
-        return repo.findAll()
-                .stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
+         return TaskMapper.toResponseList(repo.findAll());
     }
 
     public TaskResponseDTO getTaskById(String id) {
@@ -55,7 +48,7 @@ public class TaskService {
         Task task = repo.findById(id)
                 .orElseThrow(() -> new CustomNotFoundException("Task not found with id: " + id));
 
-        return mapToResponse(task);
+        return TaskMapper.toResponseDTO(task);
     }
 
     public String deleteTask(String id) {
@@ -79,32 +72,18 @@ public class TaskService {
         Task task = repo.findById(id)
                 .orElseThrow(() -> new CustomNotFoundException("Task not found with id: " + id));
 
-
-        // 2️⃣ Update mutable fields only
-        if (dto.getTitle() != null) {
-            task.setTitle(dto.getTitle());
-        }
-
-        if (dto.getDescription() != null) {
-            task.setDescription(dto.getDescription());
-        }
-
-        // DO NOT change:
-        // task.setId(...)
-        // task.setCreatedAt(...)
+        TaskMapper.mergeUpdate(task, dto);
 
         Task saved = repo.save(task);
 
-        return mapToResponse(saved);
+        return TaskMapper.toResponseDTO(saved);
     }
 
     public List<TaskResponseDTO> searchByTitle(String keyword) {
 
         List<Task> tasks = repo.findByTitleContainingIgnoreCase(keyword);
 
-        return tasks.stream()
-                .map(this::mapToResponse)
-                .toList();
+        return TaskMapper.toResponseList(tasks);
     }
 
     public TaskResponseDTO markCompleted(String id) {
@@ -114,13 +93,15 @@ public class TaskService {
                 .orElseThrow(() -> new CustomNotFoundException("Task not found with id: " + id));
 
 
-        // partial update
-        task.setCompleted(true);
+        TaskStatusPatchDTO dto = new TaskStatusPatchDTO();
+        dto.setCompleted(true);
+
+        TaskMapper.updateStatus(task, dto);
 
         // save
         Task updated = repo.save(task);
 
-        return mapToResponse(updated);
+        return TaskMapper.toResponseDTO(updated);
     }
 
     public boolean taskExists(String id) {
@@ -150,9 +131,7 @@ public class TaskService {
             tasks = repo.findAll();
         }
 
-        return tasks.stream()
-                .map(this::mapToResponse)
-                .toList();
+        return TaskMapper.toResponseList(tasks);
     }
 
     public long getTaskCount() {
@@ -168,11 +147,12 @@ public class TaskService {
                 .orElseThrow(() ->
                         new CustomNotFoundException("Task not found with id: " + id));
 
-        task.setCompleted(dto.getCompleted());
+        TaskMapper.updateStatus(task, dto);
+
 
         Task saved = repo.save(task);
 
-        return mapToResponse(saved);
+        return TaskMapper.toResponseDTO(saved);
     }
 
     public TaskResponseDTO patchTitle(String id, TaskTitlePatchDTO dto) {
@@ -189,13 +169,14 @@ public class TaskService {
                     "Completed tasks cannot change title");
         }
 
-        task.setTitle(dto.getTitle());
+        TaskMapper.updateTitle(task, dto);
+
 
         Task saved = repo.save(task);
 
         log.info("Task title changed → id: {}", id);
 
-        return mapToResponse(saved);
+        return TaskMapper.toResponseDTO(saved);
     }
 
 
@@ -207,22 +188,12 @@ public class TaskService {
                 .orElseThrow(() ->
                         new CustomNotFoundException("Task not found with id: " + id));
 
-        task.setDescription(dto.getDescription());
-
+        TaskMapper.updateDescription(task, dto);
         Task saved = repo.save(task);
 
-        return mapToResponse(saved);
+        return TaskMapper.toResponseDTO(saved);
     }
 
-    // ✅ Manual mapper method (important for learning)
-    private TaskResponseDTO mapToResponse(Task task) {
-        return TaskResponseDTO.builder()
-                .id(task.getId())
-                .title(task.getTitle())
-                .description(task.getDescription())
-                .completed(task.isCompleted())
-                .createdAt(task.getCreatedAt())
-                .build();
-    }
+
 }
 
