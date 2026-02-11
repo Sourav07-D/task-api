@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
@@ -206,7 +207,49 @@ public class TaskController {
         );
     }
 
+    @GetMapping("/paged")
+    public ResponseEntity<ApiResponse<PagedResponseDTO<TaskResponseDTO>>> getTasksPaged(
 
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction
+    ) {
+
+        PagedResponseDTO<TaskResponseDTO> response =
+                service.getTasksPaged(page, size, sortBy, direction);
+
+        return ResponseEntity.ok(
+                ApiResponse.<PagedResponseDTO<TaskResponseDTO>>builder()
+                        .success(true)
+                        .message("Tasks page fetched")
+                        .data(response)
+                        .build()
+        );
+    }
+
+    @GetMapping("/paged/filter")
+    public ResponseEntity<ApiResponse<PagedResponseDTO<TaskResponseDTO>>> getTasksByCompletedPaged(
+
+            @RequestParam boolean completed,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction
+    ) {
+
+        PagedResponseDTO<TaskResponseDTO> response =
+                service.getTasksByCompletedPaged(
+                        completed, page, size, sortBy, direction);
+
+        return ResponseEntity.ok(
+                ApiResponse.<PagedResponseDTO<TaskResponseDTO>>builder()
+                        .success(true)
+                        .message("Filtered tasks page fetched")
+                        .data(response)
+                        .build()
+        );
+    }
 
 
 

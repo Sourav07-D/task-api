@@ -6,11 +6,16 @@ import com.example.task_api.mapper.TaskMapper;
 import com.example.task_api.model.Task;
 import com.example.task_api.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import com.example.task_api.exception.CustomNotFoundException;
 
 
 import java.util.List;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +26,9 @@ import org.slf4j.LoggerFactory;
 public class TaskService {
 
     private final TaskRepository repo;
+    private static final Set<String> ALLOWED_SORT_FIELDS =
+            Set.of("title", "createdAt", "completed");
+
 
     private static final Logger log = LoggerFactory.getLogger(TaskService.class);
 
@@ -192,6 +200,88 @@ public class TaskService {
         Task saved = repo.save(task);
 
         return TaskMapper.toResponseDTO(saved);
+    }
+
+    public PagedResponseDTO<TaskResponseDTO> getTasksPaged(
+            int page,
+            int size,
+            String sortBy,
+            String direction) {
+
+        log.info("Fetching paged tasks → page: {}, size: {}", page, size);
+
+        // ✅ sort direction logic
+        Sort.Direction dir =
+                direction.equalsIgnoreCase("desc")
+                        ? Sort.Direction.DESC
+                        : Sort.Direction.ASC;
+
+        String safeSort = resolveSortField(sortBy);
+
+        Sort sort = Sort.by(dir, safeSort);
+
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<Task> taskPage = repo.findAll(pageable);
+
+        // ✅ mapper discipline — no entity leakage
+        List<TaskResponseDTO> dtoList =
+                TaskMapper.toResponseList(taskPage.getContent());
+
+        return new PagedResponseDTO<>(
+                dtoList,
+                taskPage.getNumber(),
+                taskPage.getSize(),
+                taskPage.getTotalElements(),
+                taskPage.getTotalPages(),
+                taskPage.isLast()
+        );
+    }
+    public PagedResponseDTO<TaskResponseDTO> getTasksByCompletedPaged(
+            boolean completed,
+            int page,
+            int size,
+            String sortBy,
+            String direction) {
+
+        log.info("Fetching paged tasks by completed={} → page={}, size={}",
+                completed, page, size);
+
+        Sort.Direction dir =
+                direction.equalsIgnoreCase("desc")
+                        ? Sort.Direction.DESC
+                        : Sort.Direction.ASC;
+
+        String safeSort = resolveSortField(sortBy);
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(dir, safeSort));
+
+
+        Page<Task> taskPage =
+                repo.findByCompleted(completed, pageable);
+
+        List<TaskResponseDTO> dtoList =
+                TaskMapper.toResponseList(taskPage.getContent());
+
+        return new PagedResponseDTO<>(
+                dtoList,
+                taskPage.getNumber(),
+                taskPage.getSize(),
+                taskPage.getTotalElements(),
+                taskPage.getTotalPages(),
+                taskPage.isLast()
+        );
+    }
+
+    private String resolveSortField(String sortBy) {
+
+        if (ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            return sortBy;
+        }
+
+        log.warn("Invalid sort field '{}', falling back to createdAt", sortBy);
+        return "createdAt";
     }
 
 

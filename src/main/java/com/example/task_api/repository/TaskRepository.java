@@ -1,6 +1,8 @@
 package com.example.task_api.repository;
 
 import com.example.task_api.model.Task;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
@@ -30,5 +32,7 @@ public interface TaskRepository extends MongoRepository<Task, String> {
             String keyword,
             boolean completed
     );
+    Page<Task> findByCompleted(boolean completed, Pageable pageable);
+
 
 }
