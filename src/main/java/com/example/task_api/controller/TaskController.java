@@ -19,6 +19,8 @@ public class TaskController {
 
     private final TaskService service;
 
+
+
     // ✅ Create Task
     @PostMapping
     public  ResponseEntity<ApiResponse<TaskResponseDTO>> createTask(
@@ -251,6 +253,21 @@ public class TaskController {
         );
     }
 
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<ApiResponse<List<TaskResponseDTO>>> getTasksByUser(
+            @PathVariable String userId) {
+
+        List<TaskResponseDTO> list =
+                service.getTasksByUser(userId);
+
+        return ResponseEntity.ok(
+                ApiResponse.<List<TaskResponseDTO>>builder()
+                        .success(true)
+                        .message("Tasks fetched for user")
+                        .data(list)
+                        .build()
+        );
+    }
 
 
 }

@@ -14,5 +14,8 @@ public class TaskRequestDTO {
     @NotBlank(message = "Description is required")
     @Size(min = 3, max = 100)
     private String description;
+
+    @NotBlank(message = "userId is required")
+    private String userId;
 }
 

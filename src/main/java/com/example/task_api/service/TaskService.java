@@ -5,6 +5,7 @@ import com.example.task_api.exception.BadRequestException;
 import com.example.task_api.mapper.TaskMapper;
 import com.example.task_api.model.Task;
 import com.example.task_api.repository.TaskRepository;
+import com.example.task_api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +25,8 @@ import org.slf4j.LoggerFactory;
 @Service
 @RequiredArgsConstructor
 public class TaskService {
+    private final UserRepository userRepository;
+
 
     private final TaskRepository repo;
     private static final Set<String> ALLOWED_SORT_FIELDS =
@@ -36,15 +39,20 @@ public class TaskService {
     // ✅ Create Task
     public TaskResponseDTO createTask(TaskRequestDTO dto) {
 
-        Task task = TaskMapper.fromCreateDTO(dto);
+        log.info("Creating task for userId: {}", dto.getUserId());
 
-        // createdAt auto-set in entity
+        // ✅ referential integrity check
+        if (!userRepository.existsById(dto.getUserId())) {
+            throw new BadRequestException("User does not exist");
+        }
+
+        Task task = TaskMapper.fromCreateDTO(dto);
 
         Task saved = repo.save(task);
 
-        // Entity → ResponseDTO
         return TaskMapper.toResponseDTO(saved);
     }
+
 
     // ✅ Get All Tasks
     public List<TaskResponseDTO> getAllTasks() {
@@ -283,6 +291,21 @@ public class TaskService {
         log.warn("Invalid sort field '{}', falling back to createdAt", sortBy);
         return "createdAt";
     }
+
+    public List<TaskResponseDTO> getTasksByUser(String userId) {
+
+        log.info("Fetching tasks for userId: {}", userId);
+
+        // ✅ relation integrity guard (recommended)
+        if (!userRepository.existsById(userId)) {
+            throw new CustomNotFoundException("User not found with id: " + userId);
+        }
+
+        List<Task> tasks = repo.findByUserId(userId);
+
+        return TaskMapper.toResponseList(tasks);
+    }
+
 
 
 }

@@ -15,4 +15,7 @@ public class TaskResponseDTO {
     private String description;
     private boolean completed;
     private LocalDateTime createdAt;
+
+    private String userId;
+
 }

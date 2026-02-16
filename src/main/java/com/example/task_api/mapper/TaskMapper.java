@@ -23,6 +23,9 @@ public class TaskMapper {
         dto.setCompleted(entity.isCompleted());
         dto.setCreatedAt(entity.getCreatedAt());
 
+       dto.setUserId(entity.getUserId());
+
+
         return dto;
     }
     public static Task fromCreateDTO(TaskRequestDTO dto) {
@@ -35,6 +38,9 @@ public class TaskMapper {
 
         task.setTitle(dto.getTitle());
         task.setDescription(dto.getDescription());
+
+        task.setUserId(dto.getUserId());
+
 
         // ✅ system defaults
         task.setCompleted(false);

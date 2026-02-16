@@ -34,5 +34,8 @@ public interface TaskRepository extends MongoRepository<Task, String> {
     );
     Page<Task> findByCompleted(boolean completed, Pageable pageable);
 
+    List<Task> findByUserId(String userId);
+
+
 
 }
