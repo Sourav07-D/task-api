@@ -270,5 +270,27 @@ public class TaskController {
     }
 
 
+    @GetMapping("/user/{userId}/filter")
+    public ResponseEntity<ApiResponse<List<TaskResponseDTO>>> filterTasksByUser(
+
+            @PathVariable String userId,
+            @RequestParam(required = false) Boolean completed,
+            @RequestParam(required = false) String keyword
+    ) {
+
+        List<TaskResponseDTO> list =
+                service.filterTasksByUser(
+                        userId, completed, keyword);
+
+        return ResponseEntity.ok(
+                ApiResponse.<List<TaskResponseDTO>>builder()
+                        .success(true)
+                        .message("Filtered tasks fetched for user")
+                        .data(list)
+                        .build()
+        );
+    }
+
+
 }
 

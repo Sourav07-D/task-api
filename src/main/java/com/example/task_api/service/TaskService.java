@@ -307,6 +307,53 @@ public class TaskService {
     }
 
 
+    public List<TaskResponseDTO> filterTasksByUser(
+            String userId,
+            Boolean completed,
+            String keyword) {
+
+        log.info("User filter routing → userId={}, completed={}, keyword={}",
+                userId, completed, keyword);
+
+        // ✅ relation integrity guard
+        if (!userRepository.existsById(userId)) {
+            throw new CustomNotFoundException(
+                    "User not found with id: " + userId);
+        }
+
+        List<Task> tasks;
+
+        // ✅ decision routing
+        if (completed != null && keyword != null) {
+
+            // combined
+            tasks = repo
+                    .findByUserIdAndTitleContainingIgnoreCase(userId, keyword)
+                    .stream()
+                    .filter(t -> t.isCompleted() == completed)
+                    .toList();
+
+        } else if (completed != null) {
+
+            // status only
+            tasks = repo.findByUserIdAndCompleted(userId, completed);
+
+        } else if (keyword != null && !keyword.isBlank()) {
+
+            // keyword only
+            tasks = repo.findByUserIdAndTitleContainingIgnoreCase(
+                    userId, keyword);
+
+        } else {
+
+            // none
+            tasks = repo.findByUserId(userId);
+        }
+
+        // ✅ mapper discipline preserved
+        return TaskMapper.toResponseList(tasks);
+    }
+
 
 }
 
