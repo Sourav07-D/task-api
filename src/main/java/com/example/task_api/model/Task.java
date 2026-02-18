@@ -23,4 +23,8 @@ public class Task {
      @Indexed
     private String userId;
 
+    // ✅ embedded audit object
+    private AuditInfo auditInfo;
+
+
 }

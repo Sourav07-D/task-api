@@ -1,6 +1,7 @@
 package com.example.task_api.mapper;
 
 import com.example.task_api.dto.*;
+import com.example.task_api.model.AuditInfo;
 import com.example.task_api.model.Task;
 
 import java.time.LocalDateTime;
@@ -25,6 +26,20 @@ public class TaskMapper {
 
        dto.setUserId(entity.getUserId());
 
+        AuditInfo audit = entity.getAuditInfo();
+
+        if (audit != null) {
+            dto.setAuditInfo(
+                    new AuditInfoDTO(
+                            audit.getCreatedByUserId(),
+                            audit.getCreatedAt(),
+                            audit.getLastModifiedAt(),
+                            audit.getLastModifiedByUserId()
+                    )
+            );
+        }
+
+
 
         return dto;
     }
@@ -45,6 +60,8 @@ public class TaskMapper {
         // ✅ system defaults
         task.setCompleted(false);
         task.setCreatedAt(LocalDateTime.now());
+
+        initAuditOnCreate(task, dto.getUserId());
 
         return task;
     }
@@ -104,6 +121,32 @@ public class TaskMapper {
                 .map(TaskMapper::toResponseDTO)
                 .collect(Collectors.toList());
     }
+
+    public static void initAuditOnCreate(Task task, String userId) {
+
+        AuditInfo audit = new AuditInfo();
+
+        LocalDateTime now = LocalDateTime.now();
+
+        audit.setCreatedByUserId(userId);
+        audit.setCreatedAt(now);
+
+        audit.setLastModifiedAt(now);
+        audit.setLastModifiedByUserId(userId);
+
+        task.setAuditInfo(audit);
+    }
+    public static void touchAuditOnUpdate(Task task, String actingUserId) {
+
+        if (task.getAuditInfo() == null) {
+            initAuditOnCreate(task, actingUserId);
+            return;
+        }
+
+        task.getAuditInfo().setLastModifiedAt(LocalDateTime.now());
+        task.getAuditInfo().setLastModifiedByUserId(actingUserId);
+    }
+
 
 
 }

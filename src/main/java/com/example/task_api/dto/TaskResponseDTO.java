@@ -17,5 +17,7 @@ public class TaskResponseDTO {
     private LocalDateTime createdAt;
 
     private String userId;
+    private AuditInfoDTO auditInfo;
+    private UserSummaryDTO user;
 
 }

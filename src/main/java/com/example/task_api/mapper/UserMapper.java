@@ -2,6 +2,7 @@ package com.example.task_api.mapper;
 
 import com.example.task_api.dto.UserRequestDTO;
 import com.example.task_api.dto.UserResponseDTO;
+import com.example.task_api.dto.UserSummaryDTO;
 import com.example.task_api.model.User;
 
 import java.time.LocalDateTime;
@@ -42,4 +43,16 @@ public class UserMapper {
                 .map(UserMapper::toResponseDTO)
                 .collect(Collectors.toList());
     }
+
+    public static UserSummaryDTO toSummaryDTO(User user) {
+
+        if (user == null) return null;
+
+        return new UserSummaryDTO(
+                user.getId(),
+                user.getName(),
+                user.getEmail()
+        );
+    }
+
 }
