@@ -41,6 +41,11 @@ public interface TaskRepository extends MongoRepository<Task, String> {
             String userId,
             String keyword
     );
+    List<TaskListProjection> findProjectedByUserId(String userId);
+    Page<TaskListProjection> findProjectedByUserId(
+            String userId,
+            Pageable pageable
+    );
 
 
 

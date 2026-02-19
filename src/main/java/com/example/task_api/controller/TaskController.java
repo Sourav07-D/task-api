@@ -2,6 +2,7 @@ package com.example.task_api.controller;
 
 import com.example.task_api.constants.ApiMessages;
 import com.example.task_api.dto.*;
+import com.example.task_api.repository.TaskListProjection;
 import com.example.task_api.service.TaskService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -178,5 +179,43 @@ public class TaskController {
                         .data(service.filterTasksByUser(userId, completed, keyword))
                         .build()
         );
+
     }
+
+    @GetMapping("/user/{userId}/summary")
+    public ResponseEntity<ApiResponse<List<TaskListProjection>>>
+    getTasksSummaryByUser(@PathVariable String userId) {
+
+        List<TaskListProjection> list =
+                service.getTasksLightweightByUser(userId);
+
+        return ResponseEntity.ok(
+                ApiResponse.<List<TaskListProjection>>builder()
+                        .success(true)
+                        .message("Task summaries fetched")
+                        .data(list)
+                        .build()
+        );
+    }
+    @GetMapping("/user/{userId}/summary/paged")
+    public ResponseEntity<ApiResponse<PagedResponseDTO<TaskListProjection>>>
+    getTasksSummaryPagedByUser(
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size) {
+
+        PagedResponseDTO<TaskListProjection> response =
+                service.getTasksLightweightPagedByUser(
+                        userId, page, size);
+
+        return ResponseEntity.ok(
+                ApiResponse.<PagedResponseDTO<TaskListProjection>>builder()
+                        .success(true)
+                        .message("Paged task summaries fetched")
+                        .data(response)
+                        .build()
+        );
+    }
+
+
 }

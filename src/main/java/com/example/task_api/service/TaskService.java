@@ -5,6 +5,7 @@ import com.example.task_api.exception.BadRequestException;
 import com.example.task_api.exception.CustomNotFoundException;
 import com.example.task_api.mapper.TaskMapper;
 import com.example.task_api.model.Task;
+import com.example.task_api.repository.TaskListProjection;
 import com.example.task_api.repository.TaskRepository;
 import com.example.task_api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -203,5 +204,46 @@ public class TaskService {
 
         return dto;
     }
+    public List<TaskListProjection> getTasksLightweightByUser(String userId) {
+
+        log.info("Fetching lightweight tasks for userId: {}", userId);
+
+        // Optional integrity check (recommended)
+        if (!userRepository.existsById(userId)) {
+            throw new CustomNotFoundException(
+                    "User not found with id: " + userId);
+        }
+
+        return repo.findProjectedByUserId(userId);
+    }
+
+    public PagedResponseDTO<TaskListProjection>
+    getTasksLightweightPagedByUser(
+            String userId,
+            int page,
+            int size) {
+
+        log.info("Fetching paged lightweight tasks for userId: {}", userId);
+
+        if (!userRepository.existsById(userId)) {
+            throw new CustomNotFoundException(
+                    "User not found with id: " + userId);
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        Page<TaskListProjection> taskPage =
+                repo.findProjectedByUserId(userId, pageable);
+
+        return new PagedResponseDTO<>(
+                taskPage.getContent(),
+                taskPage.getNumber(),
+                taskPage.getSize(),
+                taskPage.getTotalElements(),
+                taskPage.getTotalPages(),
+                taskPage.isLast()
+        );
+    }
+
 
 }
