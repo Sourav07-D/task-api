@@ -4,7 +4,9 @@ import com.example.task_api.dto.*;
 import com.example.task_api.exception.BadRequestException;
 import com.example.task_api.exception.CustomNotFoundException;
 import com.example.task_api.mapper.TaskMapper;
+import com.example.task_api.mapper.UserMapper;
 import com.example.task_api.model.Task;
+import com.example.task_api.model.User;
 import com.example.task_api.repository.TaskListProjection;
 import com.example.task_api.repository.TaskRepository;
 import com.example.task_api.repository.UserRepository;
@@ -14,8 +16,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,167 +26,310 @@ public class TaskService {
     private final UserRepository userRepository;
     private final TaskRepository repo;
 
-    private static final Logger log = LoggerFactory.getLogger(TaskService.class);
+    private static final Logger log =
+            LoggerFactory.getLogger(TaskService.class);
 
     private static final Set<String> ALLOWED_SORT_FIELDS =
             Set.of("title", "createdAt", "completed");
 
-    // ✅ Create
-    public TaskResponseDTO createTask(TaskRequestDTO dto) {
+    // =========================================================
+    // ✅ COMMON HELPERS
+    // =========================================================
 
-        if (!userRepository.existsById(dto.getUserId())) {
-            throw new BadRequestException("User does not exist");
-        }
-
-        Task task = TaskMapper.fromCreateDTO(dto);
-        return TaskMapper.toResponseDTO(repo.save(task));
+    private Task getTaskOrThrow(String id) {
+        return repo.findById(id)
+                .orElseThrow(() ->
+                        new CustomNotFoundException(
+                                "Task not found with id: " + id));
     }
 
-    // ✅ Get
-    public List<TaskResponseDTO> getAllTasks() {
-         return TaskMapper.toResponseList(repo.findAll())
-                .stream()
-                .map(this::enrichWithUser)
+    private void validateUserExists(String userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new CustomNotFoundException(
+                    "User not found with id: " + userId);
+        }
+    }
+
+    private Task saveWithAudit(Task task, String actingUserId) {
+        TaskMapper.touchAuditOnUpdate(task, actingUserId);
+        return repo.save(task);
+    }
+
+    // =========================================================
+    // ⭐⭐⭐ NEW — BATCH FETCH USERS (N+1 FIX)
+    // =========================================================
+
+    /**
+     * CHANGE ⭐
+     * Fetch all required users in ONE DB query
+     * instead of fetching per task.
+     */
+    private Map<String, User> fetchUsersForTasks(List<Task> tasks) {
+
+        List<String> userIds = tasks.stream()
+                .map(Task::getUserId)
+                .filter(Objects::nonNull)
+                .distinct()
                 .toList();
 
+        log.info("Batch fetching users count: {}", userIds.size());
+
+        List<User> users =
+                userRepository.findAllById(userIds);
+
+        return users.stream()
+                .collect(Collectors.toMap(
+                        User::getId,
+                        user -> user
+                ));
+    }
+
+    /**
+     * CHANGE ⭐
+     * Replaces OLD mapAndEnrichList()
+     * Eliminates N+1 queries.
+     */
+    private List<TaskResponseDTO> mapAndBatchEnrich(List<Task> tasks) {
+
+        Map<String, User> userMap =
+                fetchUsersForTasks(tasks);
+
+        return tasks.stream()
+                .map(task -> {
+
+                    TaskResponseDTO dto =
+                            TaskMapper.toResponseDTO(task);
+
+                    User user =
+                            userMap.get(task.getUserId());
+
+                    if (user != null) {
+                        dto.setUser(
+                                UserMapper.toSummaryDTO(user)
+                        );
+                    }
+
+                    return dto;
+                })
+                .toList();
+    }
+
+    /**
+     * SINGLE OBJECT enrichment (OK — not N+1)
+     */
+    private TaskResponseDTO mapAndEnrich(Task task) {
+
+        TaskResponseDTO dto =
+                TaskMapper.toResponseDTO(task);
+
+        userRepository.findById(task.getUserId())
+                .map(UserMapper::toSummaryDTO)
+                .ifPresent(dto::setUser);
+
+        return dto;
+    }
+
+    // =========================================================
+    // CREATE
+    // =========================================================
+
+    public TaskResponseDTO createTask(TaskRequestDTO dto) {
+
+        log.info("Creating task for userId: {}",
+                dto.getUserId());
+
+        validateUserExists(dto.getUserId());
+
+        Task task =
+                TaskMapper.fromCreateDTO(dto);
+
+        return mapAndEnrich(repo.save(task));
+    }
+
+    // =========================================================
+    // READ
+    // =========================================================
+
+    /**
+     * CHANGE ⭐
+     * OLD → mapAndEnrichList()
+     * NEW → mapAndBatchEnrich()
+     */
+    public List<TaskResponseDTO> getAllTasks() {
+
+        List<Task> tasks = repo.findAll();
+
+        return mapAndBatchEnrich(tasks);
     }
 
     public TaskResponseDTO getTaskById(String id) {
-        Task task = repo.findById(id)
-                .orElseThrow(() -> new CustomNotFoundException("Task not found"));
-        TaskResponseDTO dto = TaskMapper.toResponseDTO(task);
-        return enrichWithUser(dto);
-
+        return mapAndEnrich(getTaskOrThrow(id));
     }
 
-    // ✅ Delete
+    // =========================================================
+    // DELETE
+    // =========================================================
+
     public void deleteTask(String id) {
-        if (!repo.existsById(id)) {
-            throw new CustomNotFoundException("Task not found");
-        }
-        repo.deleteById(id);
+        repo.delete(getTaskOrThrow(id));
     }
 
-    // ✅ PUT with audit
+    // =========================================================
+    // UPDATE
+    // =========================================================
+
     public TaskResponseDTO updateTask(
             String id,
             TaskUpdateDTO dto,
             String actingUserId) {
 
-        Task task = repo.findById(id)
-                .orElseThrow(() -> new CustomNotFoundException("Task not found"));
+        Task task = getTaskOrThrow(id);
 
         TaskMapper.mergeUpdate(task, dto);
-        TaskMapper.touchAuditOnUpdate(task, actingUserId);
 
-        return TaskMapper.toResponseDTO(repo.save(task));
+        return mapAndEnrich(
+                saveWithAudit(task, actingUserId));
     }
 
-    // ✅ PATCH — status
     public TaskResponseDTO patchStatus(
             String id,
             TaskStatusPatchDTO dto,
             String actingUserId) {
 
-        Task task = repo.findById(id)
-                .orElseThrow(() -> new CustomNotFoundException("Task not found"));
+        Task task = getTaskOrThrow(id);
 
         TaskMapper.updateStatus(task, dto);
-        TaskMapper.touchAuditOnUpdate(task, actingUserId);
 
-        return TaskMapper.toResponseDTO(repo.save(task));
+        return mapAndEnrich(
+                saveWithAudit(task, actingUserId));
     }
 
-    // ✅ PATCH — title
     public TaskResponseDTO patchTitle(
             String id,
             TaskTitlePatchDTO dto,
             String actingUserId) {
 
-        Task task = repo.findById(id)
-                .orElseThrow(() -> new CustomNotFoundException("Task not found"));
+        Task task = getTaskOrThrow(id);
 
         if (task.isCompleted()) {
-            throw new BadRequestException("Completed tasks cannot change title");
+            throw new BadRequestException(
+                    "Completed tasks cannot change title");
         }
 
         TaskMapper.updateTitle(task, dto);
-        TaskMapper.touchAuditOnUpdate(task, actingUserId);
 
-        return TaskMapper.toResponseDTO(repo.save(task));
+        return mapAndEnrich(
+                saveWithAudit(task, actingUserId));
     }
 
-    // ✅ PATCH — description
     public TaskResponseDTO patchDescription(
             String id,
             TaskDescriptionPatchDTO dto,
             String actingUserId) {
 
-        Task task = repo.findById(id)
-                .orElseThrow(() -> new CustomNotFoundException("Task not found"));
+        Task task = getTaskOrThrow(id);
 
         TaskMapper.updateDescription(task, dto);
-        TaskMapper.touchAuditOnUpdate(task, actingUserId);
 
-        return TaskMapper.toResponseDTO(repo.save(task));
+        return mapAndEnrich(
+                saveWithAudit(task, actingUserId));
     }
 
-    // ✅ User queries
-    public List<TaskResponseDTO> getTasksByUser(String userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new CustomNotFoundException("User not found");
-        }
-        return TaskMapper.toResponseList(repo.findByUserId(userId));
+    // =========================================================
+    // USER QUERIES
+    // =========================================================
+
+    /**
+     * CHANGE ⭐ N+1 FIX APPLIED
+     */
+    public List<TaskResponseDTO> getTasksByUser(
+            String userId) {
+
+        validateUserExists(userId);
+
+        List<Task> tasks =
+                repo.findByUserId(userId);
+
+        return mapAndBatchEnrich(tasks);
     }
 
+    /**
+     * CHANGE ⭐ N+1 FIX APPLIED
+     */
     public List<TaskResponseDTO> filterTasksByUser(
             String userId,
             Boolean completed,
             String keyword) {
 
-        if (!userRepository.existsById(userId)) {
-            throw new CustomNotFoundException("User not found");
-        }
+        validateUserExists(userId);
 
         List<Task> tasks;
 
         if (completed != null && keyword != null) {
-            tasks = repo.findByUserIdAndTitleContainingIgnoreCase(userId, keyword)
+
+            tasks = repo
+                    .findByUserIdAndTitleContainingIgnoreCase(
+                            userId, keyword)
                     .stream()
-                    .filter(t -> t.isCompleted() == completed)
+                    .filter(t ->
+                            t.isCompleted() == completed)
                     .toList();
+
         } else if (completed != null) {
-            tasks = repo.findByUserIdAndCompleted(userId, completed);
-        } else if (keyword != null && !keyword.isBlank()) {
-            tasks = repo.findByUserIdAndTitleContainingIgnoreCase(userId, keyword);
+
+            tasks =
+                    repo.findByUserIdAndCompleted(
+                            userId, completed);
+
+        } else if (keyword != null &&
+                !keyword.isBlank()) {
+
+            tasks =
+                    repo.findByUserIdAndTitleContainingIgnoreCase(
+                            userId, keyword);
+
         } else {
-            tasks = repo.findByUserId(userId);
+
+            tasks =
+                    repo.findByUserId(userId);
         }
 
-        return TaskMapper.toResponseList(tasks);
+        return mapAndBatchEnrich(tasks);
     }
 
-    // ✅ Paging
-    public PagedResponseDTO<TaskResponseDTO> getTasksPaged(
-            int page, int size, String sortBy, String direction) {
+    // =========================================================
+    // PAGINATION
+    // =========================================================
 
-        Sort.Direction dir =
-                direction.equalsIgnoreCase("desc")
-                        ? Sort.Direction.DESC
-                        : Sort.Direction.ASC;
+    /**
+     * CHANGE ⭐ Pagination also optimized
+     */
+    public PagedResponseDTO<TaskResponseDTO>
+    getTasksPaged(
+            int page,
+            int size,
+            String sortBy,
+            String direction) {
 
-        String safeSort = ALLOWED_SORT_FIELDS.contains(sortBy)
-                ? sortBy : "createdAt";
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(
+                        "desc".equalsIgnoreCase(direction)
+                                ? Sort.Direction.DESC
+                                : Sort.Direction.ASC,
+                        ALLOWED_SORT_FIELDS.contains(sortBy)
+                                ? sortBy
+                                : "createdAt"
+                )
+        );
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(dir, safeSort));
-
-        Page<Task> taskPage = repo.findAll(pageable);
+        Page<Task> taskPage =
+                repo.findAll(pageable);
 
         return new PagedResponseDTO<>(
-                TaskMapper.toResponseList(taskPage.getContent())
-                        .stream()
-                        .map(this::enrichWithUser)
-                        .toList(),
+                mapAndBatchEnrich(
+                        taskPage.getContent()),
                 taskPage.getNumber(),
                 taskPage.getSize(),
                 taskPage.getTotalElements(),
@@ -192,27 +337,15 @@ public class TaskService {
                 taskPage.isLast()
         );
     }
-    private TaskResponseDTO enrichWithUser(TaskResponseDTO dto) {
 
-        if (dto == null || dto.getUserId() == null) {
-            return dto;
-        }
+    // =========================================================
+    // PROJECTION (UNCHANGED — ALREADY OPTIMAL)
+    // =========================================================
 
-        userRepository.findById(dto.getUserId())
-                .map(com.example.task_api.mapper.UserMapper::toSummaryDTO)
-                .ifPresent(dto::setUser);
+    public List<TaskListProjection>
+    getTasksLightweightByUser(String userId) {
 
-        return dto;
-    }
-    public List<TaskListProjection> getTasksLightweightByUser(String userId) {
-
-        log.info("Fetching lightweight tasks for userId: {}", userId);
-
-        // Optional integrity check (recommended)
-        if (!userRepository.existsById(userId)) {
-            throw new CustomNotFoundException(
-                    "User not found with id: " + userId);
-        }
+        validateUserExists(userId);
 
         return repo.findProjectedByUserId(userId);
     }
@@ -223,17 +356,14 @@ public class TaskService {
             int page,
             int size) {
 
-        log.info("Fetching paged lightweight tasks for userId: {}", userId);
+        validateUserExists(userId);
 
-        if (!userRepository.existsById(userId)) {
-            throw new CustomNotFoundException(
-                    "User not found with id: " + userId);
-        }
-
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable =
+                PageRequest.of(page, size);
 
         Page<TaskListProjection> taskPage =
-                repo.findProjectedByUserId(userId, pageable);
+                repo.findProjectedByUserId(
+                        userId, pageable);
 
         return new PagedResponseDTO<>(
                 taskPage.getContent(),
@@ -244,6 +374,4 @@ public class TaskService {
                 taskPage.isLast()
         );
     }
-
-
 }
