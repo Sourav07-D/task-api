@@ -13,6 +13,8 @@ import com.example.task_api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
@@ -26,15 +28,19 @@ public class TaskService {
     private final UserRepository userRepository;
     private final TaskRepository repo;
 
+    // ⭐ CHANGE — use UserService instead of repository
+    // ensures USER CACHE is used
+    private final UserService userService;
+
     private static final Logger log =
             LoggerFactory.getLogger(TaskService.class);
 
     private static final Set<String> ALLOWED_SORT_FIELDS =
             Set.of("title", "createdAt", "completed");
 
-    // =========================================================
-    // ✅ COMMON HELPERS
-    // =========================================================
+    // =====================================================
+    // COMMON HELPERS
+    // =====================================================
 
     private Task getTaskOrThrow(String id) {
         return repo.findById(id)
@@ -55,15 +61,10 @@ public class TaskService {
         return repo.save(task);
     }
 
-    // =========================================================
-    // ⭐⭐⭐ NEW — BATCH FETCH USERS (N+1 FIX)
-    // =========================================================
+    // =====================================================
+    // ⭐ CHANGE — N+1 FIX (Batch Fetch Users)
+    // =====================================================
 
-    /**
-     * CHANGE ⭐
-     * Fetch all required users in ONE DB query
-     * instead of fetching per task.
-     */
     private Map<String, User> fetchUsersForTasks(List<Task> tasks) {
 
         List<String> userIds = tasks.stream()
@@ -80,15 +81,11 @@ public class TaskService {
         return users.stream()
                 .collect(Collectors.toMap(
                         User::getId,
-                        user -> user
+                        u -> u
                 ));
     }
 
-    /**
-     * CHANGE ⭐
-     * Replaces OLD mapAndEnrichList()
-     * Eliminates N+1 queries.
-     */
+    // ⭐ CHANGE — replaces old enrichment loop
     private List<TaskResponseDTO> mapAndBatchEnrich(List<Task> tasks) {
 
         Map<String, User> userMap =
@@ -105,8 +102,7 @@ public class TaskService {
 
                     if (user != null) {
                         dto.setUser(
-                                UserMapper.toSummaryDTO(user)
-                        );
+                                UserMapper.toSummaryDTO(user));
                     }
 
                     return dto;
@@ -114,74 +110,78 @@ public class TaskService {
                 .toList();
     }
 
-    /**
-     * SINGLE OBJECT enrichment (OK — not N+1)
-     */
+    // ⭐ CHANGE — single fetch now uses USER CACHE
     private TaskResponseDTO mapAndEnrich(Task task) {
 
         TaskResponseDTO dto =
                 TaskMapper.toResponseDTO(task);
 
-        userRepository.findById(task.getUserId())
-                .map(UserMapper::toSummaryDTO)
-                .ifPresent(dto::setUser);
+        // ⭐ IMPORTANT CHANGE
+        // uses cached service call
+        dto.setUser(
+                userService.getUserSummary(task.getUserId())
+        );
 
         return dto;
     }
 
-    // =========================================================
+    // =====================================================
     // CREATE
-    // =========================================================
+    // =====================================================
 
     public TaskResponseDTO createTask(TaskRequestDTO dto) {
 
-        log.info("Creating task for userId: {}",
-                dto.getUserId());
+        log.info("Creating task for userId: {}", dto.getUserId());
 
         validateUserExists(dto.getUserId());
 
-        Task task =
-                TaskMapper.fromCreateDTO(dto);
+        Task task = TaskMapper.fromCreateDTO(dto);
 
         return mapAndEnrich(repo.save(task));
     }
 
-    // =========================================================
+    // =====================================================
     // READ
-    // =========================================================
+    // =====================================================
 
-    /**
-     * CHANGE ⭐
-     * OLD → mapAndEnrichList()
-     * NEW → mapAndBatchEnrich()
-     */
     public List<TaskResponseDTO> getAllTasks() {
-
-        List<Task> tasks = repo.findAll();
-
-        return mapAndBatchEnrich(tasks);
+        return mapAndBatchEnrich(repo.findAll());
     }
 
+    // ⭐ CHANGE — TASK CACHE ENABLED
+    @Cacheable(value = "tasks", key = "#id")
     public TaskResponseDTO getTaskById(String id) {
+
+        log.info("Fetching task from DB with id: {}", id);
+
         return mapAndEnrich(getTaskOrThrow(id));
     }
 
-    // =========================================================
+    // =====================================================
     // DELETE
-    // =========================================================
+    // =====================================================
 
+    // ⭐ CHANGE — CACHE EVICTION ADDED
+    @CacheEvict(value = "tasks", key = "#id")
     public void deleteTask(String id) {
+
+        log.info("Deleting task {}, cache evicted", id);
+
         repo.delete(getTaskOrThrow(id));
     }
 
-    // =========================================================
+    // =====================================================
     // UPDATE
-    // =========================================================
+    // =====================================================
 
+    // ⭐ CHANGE — CACHE EVICTION
+    @CacheEvict(value = "tasks", key = "#id")
     public TaskResponseDTO updateTask(
             String id,
             TaskUpdateDTO dto,
             String actingUserId) {
+
+        log.info("Updating task {}, cache evicted", id);
 
         Task task = getTaskOrThrow(id);
 
@@ -191,6 +191,8 @@ public class TaskService {
                 saveWithAudit(task, actingUserId));
     }
 
+    // ⭐ CHANGE — CACHE EVICTION
+    @CacheEvict(value = "tasks", key = "#id")
     public TaskResponseDTO patchStatus(
             String id,
             TaskStatusPatchDTO dto,
@@ -204,6 +206,8 @@ public class TaskService {
                 saveWithAudit(task, actingUserId));
     }
 
+    // ⭐ CHANGE — CACHE EVICTION
+    @CacheEvict(value = "tasks", key = "#id")
     public TaskResponseDTO patchTitle(
             String id,
             TaskTitlePatchDTO dto,
@@ -222,6 +226,8 @@ public class TaskService {
                 saveWithAudit(task, actingUserId));
     }
 
+    // ⭐ CHANGE — CACHE EVICTION
+    @CacheEvict(value = "tasks", key = "#id")
     public TaskResponseDTO patchDescription(
             String id,
             TaskDescriptionPatchDTO dto,
@@ -235,101 +241,46 @@ public class TaskService {
                 saveWithAudit(task, actingUserId));
     }
 
-    // =========================================================
-    // USER QUERIES
-    // =========================================================
+    // =====================================================
+    // USER QUERIES (N+1 OPTIMIZED)
+    // =====================================================
 
-    /**
-     * CHANGE ⭐ N+1 FIX APPLIED
-     */
-    public List<TaskResponseDTO> getTasksByUser(
-            String userId) {
+    public List<TaskResponseDTO> getTasksByUser(String userId) {
 
         validateUserExists(userId);
 
-        List<Task> tasks =
-                repo.findByUserId(userId);
-
-        return mapAndBatchEnrich(tasks);
+        return mapAndBatchEnrich(
+                repo.findByUserId(userId));
     }
 
-    /**
-     * CHANGE ⭐ N+1 FIX APPLIED
-     */
-    public List<TaskResponseDTO> filterTasksByUser(
-            String userId,
-            Boolean completed,
-            String keyword) {
-
-        validateUserExists(userId);
-
-        List<Task> tasks;
-
-        if (completed != null && keyword != null) {
-
-            tasks = repo
-                    .findByUserIdAndTitleContainingIgnoreCase(
-                            userId, keyword)
-                    .stream()
-                    .filter(t ->
-                            t.isCompleted() == completed)
-                    .toList();
-
-        } else if (completed != null) {
-
-            tasks =
-                    repo.findByUserIdAndCompleted(
-                            userId, completed);
-
-        } else if (keyword != null &&
-                !keyword.isBlank()) {
-
-            tasks =
-                    repo.findByUserIdAndTitleContainingIgnoreCase(
-                            userId, keyword);
-
-        } else {
-
-            tasks =
-                    repo.findByUserId(userId);
-        }
-
-        return mapAndBatchEnrich(tasks);
-    }
-
-    // =========================================================
+    // =====================================================
     // PAGINATION
-    // =========================================================
+    // =====================================================
 
-    /**
-     * CHANGE ⭐ Pagination also optimized
-     */
     public PagedResponseDTO<TaskResponseDTO>
-    getTasksPaged(
-            int page,
-            int size,
-            String sortBy,
-            String direction) {
+    getTasksPaged(int page,
+                  int size,
+                  String sortBy,
+                  String direction) {
 
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(
-                        "desc".equalsIgnoreCase(direction)
-                                ? Sort.Direction.DESC
-                                : Sort.Direction.ASC,
-                        ALLOWED_SORT_FIELDS.contains(sortBy)
-                                ? sortBy
-                                : "createdAt"
-                )
-        );
+        Pageable pageable =
+                PageRequest.of(
+                        page,
+                        size,
+                        Sort.by(
+                                "desc".equalsIgnoreCase(direction)
+                                        ? Sort.Direction.DESC
+                                        : Sort.Direction.ASC,
+                                ALLOWED_SORT_FIELDS.contains(sortBy)
+                                        ? sortBy
+                                        : "createdAt"
+                        ));
 
         Page<Task> taskPage =
                 repo.findAll(pageable);
 
         return new PagedResponseDTO<>(
-                mapAndBatchEnrich(
-                        taskPage.getContent()),
+                mapAndBatchEnrich(taskPage.getContent()),
                 taskPage.getNumber(),
                 taskPage.getSize(),
                 taskPage.getTotalElements(),
@@ -338,9 +289,9 @@ public class TaskService {
         );
     }
 
-    // =========================================================
-    // PROJECTION (UNCHANGED — ALREADY OPTIMAL)
-    // =========================================================
+    // =====================================================
+    // PROJECTION (ALREADY OPTIMAL)
+    // =====================================================
 
     public List<TaskListProjection>
     getTasksLightweightByUser(String userId) {
