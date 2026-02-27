@@ -19,6 +19,7 @@ import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,7 +28,7 @@ public class TaskService {
 
     private final UserRepository userRepository;
     private final TaskRepository repo;
-
+    private final AsyncUserService asyncUserService;
     // ⭐ CHANGE — use UserService instead of repository
     // ensures USER CACHE is used
     private final UserService userService;
@@ -84,31 +85,97 @@ public class TaskService {
                         u -> u
                 ));
     }
+    private List<TaskResponseDTO> mapAndBatchEnrichAsync(List<Task> tasks) {
 
-    // ⭐ CHANGE — replaces old enrichment loop
-    private List<TaskResponseDTO> mapAndBatchEnrich(List<Task> tasks) {
+        long start = System.currentTimeMillis();
 
-        Map<String, User> userMap =
-                fetchUsersForTasks(tasks);
-
-        return tasks.stream()
-                .map(task -> {
-
-                    TaskResponseDTO dto =
-                            TaskMapper.toResponseDTO(task);
-
-                    User user =
-                            userMap.get(task.getUserId());
-
-                    if (user != null) {
-                        dto.setUser(
-                                UserMapper.toSummaryDTO(user));
-                    }
-
-                    return dto;
-                })
+        // 1️⃣ collect unique userIds
+        List<String> userIds = tasks.stream()
+                .map(Task::getUserId)
+                .filter(id -> id != null)
+                .distinct()
                 .toList();
+
+        // 2️⃣ launch async calls
+        List<CompletableFuture<User>> futures =
+                userIds.stream()
+                        .map(asyncUserService::fetchUserAsync)
+                        .toList();
+
+        // 3️⃣ wait for all to complete
+        CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+        ).join();
+
+        // 4️⃣ collect results into map
+        Map<String, User> userMap =
+                futures.stream()
+                        .map(CompletableFuture::join)
+                        .collect(Collectors.toMap(
+                                User::getId,
+                                user -> user
+                        ));
+
+        // 5️⃣ map tasks
+        List<TaskResponseDTO> result =
+                tasks.stream()
+                        .map(task -> {
+                            TaskResponseDTO dto =
+                                    TaskMapper.toResponseDTO(task);
+
+                            User user =
+                                    userMap.get(task.getUserId());
+
+                            if (user != null) {
+                                dto.setUser(
+                                        UserMapper.toSummaryDTO(user)
+                                );
+                            }
+
+                            return dto;
+                        })
+                        .toList();
+
+        long end = System.currentTimeMillis();
+        log.info("Async enrichment time: {} ms",
+                (end - start));
+
+        return result;
     }
+
+    private List<TaskResponseDTO> mapAndBatchEnrichSequential(List<Task> tasks) {
+
+        long start = System.currentTimeMillis();
+
+        Map<String, User> userMap = fetchUsersForTasks(tasks);
+
+        List<TaskResponseDTO> result =
+                tasks.stream()
+                        .map(task -> {
+                            TaskResponseDTO dto =
+                                    TaskMapper.toResponseDTO(task);
+
+                            User user =
+                                    userMap.get(task.getUserId());
+
+                            if (user != null) {
+                                dto.setUser(
+                                        UserMapper.toSummaryDTO(user)
+                                );
+                            }
+
+                            return dto;
+                        })
+                        .toList();
+
+        long end = System.currentTimeMillis();
+        log.info("Sequential enrichment time: {} ms",
+                (end - start));
+
+        return result;
+    }
+
+
 
     // ⭐ CHANGE — single fetch now uses USER CACHE
     private TaskResponseDTO mapAndEnrich(Task task) {
@@ -145,7 +212,7 @@ public class TaskService {
     // =====================================================
 
     public List<TaskResponseDTO> getAllTasks() {
-        return mapAndBatchEnrich(repo.findAll());
+        return mapAndBatchEnrichAsync(repo.findAll());
     }
 
     // ⭐ CHANGE — TASK CACHE ENABLED
@@ -249,7 +316,7 @@ public class TaskService {
 
         validateUserExists(userId);
 
-        return mapAndBatchEnrich(
+        return mapAndBatchEnrichAsync(
                 repo.findByUserId(userId));
     }
 
@@ -280,7 +347,7 @@ public class TaskService {
                 repo.findAll(pageable);
 
         return new PagedResponseDTO<>(
-                mapAndBatchEnrich(taskPage.getContent()),
+                mapAndBatchEnrichAsync(taskPage.getContent()),
                 taskPage.getNumber(),
                 taskPage.getSize(),
                 taskPage.getTotalElements(),
