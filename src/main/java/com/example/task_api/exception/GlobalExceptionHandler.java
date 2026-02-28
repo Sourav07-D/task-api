@@ -3,6 +3,7 @@ package com.example.task_api.exception;
 import com.example.task_api.dto.ErrorResponseDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.validation.FieldError;
@@ -82,6 +83,21 @@ public class GlobalExceptionHandler {
                 .message(fieldErrors.toString())
                 .path(request.getRequestURI())
                 .build();
+    }
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponseDTO> handleTooManyRequests(
+            TooManyRequestsException ex,
+            HttpServletRequest request) {
+
+        ErrorResponseDTO error = new ErrorResponseDTO(
+                LocalDateTime.now(),
+                429,
+                "Too Many Requests",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(429).body(error);
     }
 
 }

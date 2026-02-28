@@ -355,6 +355,56 @@ public class TaskService {
                 taskPage.isLast()
         );
     }
+    public List<TaskResponseDTO> filterTasksByUser(
+            String userId,
+            Boolean completed,
+            String keyword) {
+
+        log.info("Filtering tasks for userId: {}", userId);
+
+        validateUserExists(userId);
+
+        List<Task> tasks;
+
+        // ✅ Decision routing
+        if (completed != null && keyword != null && !keyword.isBlank()) {
+
+            tasks = repo
+                    .findByUserIdAndTitleContainingIgnoreCase(
+                            userId,
+                            keyword
+                    )
+                    .stream()
+                    .filter(task ->
+                            task.isCompleted() == completed)
+                    .toList();
+
+        }
+        else if (completed != null) {
+
+            tasks = repo.findByUserIdAndCompleted(
+                    userId,
+                    completed
+            );
+
+        }
+        else if (keyword != null && !keyword.isBlank()) {
+
+            tasks = repo
+                    .findByUserIdAndTitleContainingIgnoreCase(
+                            userId,
+                            keyword
+                    );
+        }
+        else {
+
+            tasks = repo.findByUserId(userId);
+        }
+
+        // ✅ IMPORTANT
+        // async enrichment prevents N+1 problem
+        return mapAndBatchEnrichAsync(tasks);
+    }
 
     // =====================================================
     // PROJECTION (ALREADY OPTIMAL)
