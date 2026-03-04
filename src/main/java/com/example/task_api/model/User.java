@@ -9,6 +9,8 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.util.PrimitiveIterator;
+import java.util.Set;
 
 @Data
 @NoArgsConstructor
@@ -23,6 +25,8 @@ public class User {
 
     @Indexed(unique = true)   // ✅ unique index for email (Mongo)
     private String email;
+    private  String password;
+    private Set<String> roles;
 
     private LocalDateTime createdAt;
 }
