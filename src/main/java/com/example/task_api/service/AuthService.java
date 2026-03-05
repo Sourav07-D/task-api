@@ -7,6 +7,8 @@ import com.example.task_api.exception.CustomNotFoundException;
 import com.example.task_api.model.User;
 import com.example.task_api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +21,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private  final AuthenticationManager authenticationManager;
 
     // REGISTER
     public String register(RegisterRequestDTO dto) {
@@ -46,22 +49,33 @@ public class AuthService {
     }
 
     // LOGIN
+//    public String login(LoginRequestDTO dto) {
+//
+//        User user = userRepository.findByEmail(dto.getEmail())
+//                .orElseThrow(() ->
+//                        new CustomNotFoundException("User not found"));
+//
+//        // 🔐 VERIFY PASSWORD
+//        boolean valid =
+//                passwordEncoder.matches(
+//                        dto.getPassword(),
+//                        user.getPassword()
+//                );
+//
+//        if (!valid) {
+//            throw new BadRequestException("Invalid credentials");
+//        }
+//
+//        return "Login successful";
+//    }
     public String login(LoginRequestDTO dto) {
 
-        User user = userRepository.findByEmail(dto.getEmail())
-                .orElseThrow(() ->
-                        new CustomNotFoundException("User not found"));
-
-        // 🔐 VERIFY PASSWORD
-        boolean valid =
-                passwordEncoder.matches(
-                        dto.getPassword(),
-                        user.getPassword()
-                );
-
-        if (!valid) {
-            throw new BadRequestException("Invalid credentials");
-        }
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        dto.getEmail(),
+                        dto.getPassword()
+                )
+        );
 
         return "Login successful";
     }
