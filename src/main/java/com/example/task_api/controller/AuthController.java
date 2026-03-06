@@ -1,6 +1,7 @@
 package com.example.task_api.controller;
 
 import com.example.task_api.dto.LoginRequestDTO;
+import com.example.task_api.dto.LoginResponseDTO;
 import com.example.task_api.dto.RegisterRequestDTO;
 import com.example.task_api.dto.ApiResponse;
 import com.example.task_api.service.AuthService;
@@ -32,15 +33,9 @@ public class AuthController {
 
     // LOGIN
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<String>> login(
+    public ApiResponse<LoginResponseDTO> login(
             @Valid @RequestBody LoginRequestDTO dto) {
 
-        return ResponseEntity.ok(
-                new ApiResponse<>(
-                        true,
-                        "Login successful",
-                        authService.login(dto)
-                )
-        );
+        return ApiResponse.success(authService.login(dto));
     }
 }

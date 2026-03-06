@@ -1,11 +1,13 @@
 package com.example.task_api.service;
 
 import com.example.task_api.dto.LoginRequestDTO;
+import com.example.task_api.dto.LoginResponseDTO;
 import com.example.task_api.dto.RegisterRequestDTO;
 import com.example.task_api.exception.BadRequestException;
 import com.example.task_api.exception.CustomNotFoundException;
 import com.example.task_api.model.User;
 import com.example.task_api.repository.UserRepository;
+import com.example.task_api.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -22,6 +24,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private  final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
 
     // REGISTER
     public String register(RegisterRequestDTO dto) {
@@ -68,7 +71,7 @@ public class AuthService {
 //
 //        return "Login successful";
 //    }
-    public String login(LoginRequestDTO dto) {
+    public LoginResponseDTO login(LoginRequestDTO dto) {
 
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -76,7 +79,8 @@ public class AuthService {
                         dto.getPassword()
                 )
         );
+        String token =jwtService.generateToken(dto.getEmail());
 
-        return "Login successful";
+        return new LoginResponseDTO(token);
     }
 }
