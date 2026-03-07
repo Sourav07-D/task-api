@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -23,7 +24,7 @@ public class JwtService {
         return Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    // Generate JWT
+    // Generate token
     public String generateToken(String username) {
 
         return Jwts.builder()
@@ -34,10 +35,24 @@ public class JwtService {
                 .compact();
     }
 
-    // Extract username (used tomorrow)
+    // Extract username
     public String extractUsername(String token) {
-
         return extractAllClaims(token).getSubject();
+    }
+
+    // Validate token
+    public boolean validateToken(String token, UserDetails userDetails) {
+
+        String username = extractUsername(token);
+
+        return username.equals(userDetails.getUsername())
+                && !isTokenExpired(token);
+    }
+
+    private boolean isTokenExpired(String token) {
+        return extractAllClaims(token)
+                .getExpiration()
+                .before(new Date());
     }
 
     private Claims extractAllClaims(String token) {
@@ -49,3 +64,4 @@ public class JwtService {
                 .getBody();
     }
 }
+
