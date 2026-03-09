@@ -1,9 +1,6 @@
 package com.example.task_api.controller;
 
-import com.example.task_api.dto.LoginRequestDTO;
-import com.example.task_api.dto.LoginResponseDTO;
-import com.example.task_api.dto.RegisterRequestDTO;
-import com.example.task_api.dto.ApiResponse;
+import com.example.task_api.dto.*;
 import com.example.task_api.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +16,7 @@ public class AuthController {
 
     // REGISTER
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<String>> register(
+    public ResponseEntity<ApiResponse<UserResponseDTO>> register(
             @Valid @RequestBody RegisterRequestDTO dto) {
 
         return ResponseEntity.ok(

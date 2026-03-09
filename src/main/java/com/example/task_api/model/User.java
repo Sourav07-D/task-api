@@ -1,5 +1,6 @@
 package com.example.task_api.model;
 
+import com.example.task_api.security.Role;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -26,7 +27,7 @@ public class User {
     @Indexed(unique = true)   // ✅ unique index for email (Mongo)
     private String email;
     private  String password;
-    private Set<String> roles;
+    private Role role;
 
     private LocalDateTime createdAt;
 }
