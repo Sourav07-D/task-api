@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 
@@ -27,18 +28,31 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtFilter;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
                 .csrf(csrf -> csrf.disable())
 
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                 .authorizeHttpRequests(auth -> auth
+
+                        // Public endpoints
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/api/v1/tasks/**").authenticated()
+
+                        // Tasks viewing allowed for USER + ADMIN
+                        .requestMatchers(HttpMethod.GET, "/api/v1/tasks/**")
+                        .hasAnyRole("USER", "ADMIN")
+
+                        // Task creation allowed only for ADMIN
+                        .requestMatchers(HttpMethod.POST, "/api/v1/tasks/**")
+                        .hasRole("ADMIN")
+
+                        // Admin endpoints
+                        .requestMatchers("/api/v1/admin/**")
+                        .hasRole("ADMIN")
+
                         .anyRequest().authenticated()
                 )
 
