@@ -44,7 +44,7 @@ public class AuthService {
         // 🔐 HASH PASSWORD
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
 
-        user.setRole(Role.USER);
+        user.setRole(Role.ADMIN);
         user.setCreatedAt(LocalDateTime.now());
 
         User saved = userRepository.save(user);

@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -210,7 +211,7 @@ public class TaskService {
     // =====================================================
     // READ
     // =====================================================
-
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public List<TaskResponseDTO> getAllTasks() {
         return mapAndBatchEnrichAsync(repo.findAll());
     }
@@ -230,6 +231,7 @@ public class TaskService {
 
     // ⭐ CHANGE — CACHE EVICTION ADDED
     @CacheEvict(value = "tasks", key = "#id")
+    @PreAuthorize("hasRole('ADMIN')")
     public void deleteTask(String id) {
 
         log.info("Deleting task {}, cache evicted", id);
@@ -243,6 +245,7 @@ public class TaskService {
 
     // ⭐ CHANGE — CACHE EVICTION
     @CacheEvict(value = "tasks", key = "#id")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public TaskResponseDTO updateTask(
             String id,
             TaskUpdateDTO dto,
