@@ -18,6 +18,10 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -30,8 +34,6 @@ public class TaskService {
     private final UserRepository userRepository;
     private final TaskRepository repo;
     private final AsyncUserService asyncUserService;
-    // ⭐ CHANGE — use UserService instead of repository
-    // ensures USER CACHE is used
     private final UserService userService;
 
     private static final Logger log =
@@ -64,7 +66,7 @@ public class TaskService {
     }
 
     // =====================================================
-    // ⭐ CHANGE — N+1 FIX (Batch Fetch Users)
+    // ⭐ N+1 FIX (Batch Fetch Users)
     // =====================================================
 
     private Map<String, User> fetchUsersForTasks(List<Task> tasks) {
@@ -86,29 +88,26 @@ public class TaskService {
                         u -> u
                 ));
     }
+
     private List<TaskResponseDTO> mapAndBatchEnrichAsync(List<Task> tasks) {
 
         long start = System.currentTimeMillis();
 
-        // 1️⃣ collect unique userIds
         List<String> userIds = tasks.stream()
                 .map(Task::getUserId)
                 .filter(id -> id != null)
                 .distinct()
                 .toList();
 
-        // 2️⃣ launch async calls
         List<CompletableFuture<User>> futures =
                 userIds.stream()
                         .map(asyncUserService::fetchUserAsync)
                         .toList();
 
-        // 3️⃣ wait for all to complete
         CompletableFuture.allOf(
                 futures.toArray(new CompletableFuture[0])
         ).join();
 
-        // 4️⃣ collect results into map
         Map<String, User> userMap =
                 futures.stream()
                         .map(CompletableFuture::join)
@@ -117,7 +116,6 @@ public class TaskService {
                                 user -> user
                         ));
 
-        // 5️⃣ map tasks
         List<TaskResponseDTO> result =
                 tasks.stream()
                         .map(task -> {
@@ -144,48 +142,11 @@ public class TaskService {
         return result;
     }
 
-    private List<TaskResponseDTO> mapAndBatchEnrichSequential(List<Task> tasks) {
-
-        long start = System.currentTimeMillis();
-
-        Map<String, User> userMap = fetchUsersForTasks(tasks);
-
-        List<TaskResponseDTO> result =
-                tasks.stream()
-                        .map(task -> {
-                            TaskResponseDTO dto =
-                                    TaskMapper.toResponseDTO(task);
-
-                            User user =
-                                    userMap.get(task.getUserId());
-
-                            if (user != null) {
-                                dto.setUser(
-                                        UserMapper.toSummaryDTO(user)
-                                );
-                            }
-
-                            return dto;
-                        })
-                        .toList();
-
-        long end = System.currentTimeMillis();
-        log.info("Sequential enrichment time: {} ms",
-                (end - start));
-
-        return result;
-    }
-
-
-
-    // ⭐ CHANGE — single fetch now uses USER CACHE
     private TaskResponseDTO mapAndEnrich(Task task) {
 
         TaskResponseDTO dto =
                 TaskMapper.toResponseDTO(task);
 
-        // ⭐ IMPORTANT CHANGE
-        // uses cached service call
         dto.setUser(
                 userService.getUserSummary(task.getUserId())
         );
@@ -199,11 +160,19 @@ public class TaskService {
 
     public TaskResponseDTO createTask(TaskRequestDTO dto) {
 
-        log.info("Creating task for userId: {}", dto.getUserId());
+        // ⭐ CHANGE — use authenticated user, NOT DTO
+        String currentUserEmail = getCurrentUserEmail();
 
-        validateUserExists(dto.getUserId());
+        log.info("Creating task for authenticated user: {}", currentUserEmail);
+
+        // ⭐ CHANGE — validate using authenticated user
+        validateUserExists(currentUserEmail);
 
         Task task = TaskMapper.fromCreateDTO(dto);
+
+        // ⭐ CRITICAL SECURITY CHANGE
+        // Never trust client userId
+        task.setUserId(currentUserEmail);
 
         return mapAndEnrich(repo.save(task));
     }
@@ -211,12 +180,12 @@ public class TaskService {
     // =====================================================
     // READ
     // =====================================================
+
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public List<TaskResponseDTO> getAllTasks() {
         return mapAndBatchEnrichAsync(repo.findAll());
     }
 
-    // ⭐ CHANGE — TASK CACHE ENABLED
     @Cacheable(value = "tasks", key = "#id")
     public TaskResponseDTO getTaskById(String id) {
 
@@ -229,21 +198,24 @@ public class TaskService {
     // DELETE
     // =====================================================
 
-    // ⭐ CHANGE — CACHE EVICTION ADDED
     @CacheEvict(value = "tasks", key = "#id")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')") // ⭐ CHANGE
     public void deleteTask(String id) {
 
         log.info("Deleting task {}, cache evicted", id);
 
-        repo.delete(getTaskOrThrow(id));
+        Task task = getTaskOrThrow(id);
+
+        // ⭐ NEW — ownership check
+        checkOwnershipOrAdmin(task);
+
+        repo.delete(task);
     }
 
     // =====================================================
     // UPDATE
     // =====================================================
 
-    // ⭐ CHANGE — CACHE EVICTION
     @CacheEvict(value = "tasks", key = "#id")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public TaskResponseDTO updateTask(
@@ -255,14 +227,17 @@ public class TaskService {
 
         Task task = getTaskOrThrow(id);
 
+        // ⭐ NEW — ownership check
+        checkOwnershipOrAdmin(task);
+
         TaskMapper.mergeUpdate(task, dto);
 
         return mapAndEnrich(
                 saveWithAudit(task, actingUserId));
     }
 
-    // ⭐ CHANGE — CACHE EVICTION
     @CacheEvict(value = "tasks", key = "#id")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')") // ⭐ CHANGE
     public TaskResponseDTO patchStatus(
             String id,
             TaskStatusPatchDTO dto,
@@ -270,20 +245,26 @@ public class TaskService {
 
         Task task = getTaskOrThrow(id);
 
+        // ⭐ NEW
+        checkOwnershipOrAdmin(task);
+
         TaskMapper.updateStatus(task, dto);
 
         return mapAndEnrich(
                 saveWithAudit(task, actingUserId));
     }
 
-    // ⭐ CHANGE — CACHE EVICTION
     @CacheEvict(value = "tasks", key = "#id")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')") // ⭐ CHANGE
     public TaskResponseDTO patchTitle(
             String id,
             TaskTitlePatchDTO dto,
             String actingUserId) {
 
         Task task = getTaskOrThrow(id);
+
+        // ⭐ NEW
+        checkOwnershipOrAdmin(task);
 
         if (task.isCompleted()) {
             throw new BadRequestException(
@@ -296,14 +277,17 @@ public class TaskService {
                 saveWithAudit(task, actingUserId));
     }
 
-    // ⭐ CHANGE — CACHE EVICTION
     @CacheEvict(value = "tasks", key = "#id")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')") // ⭐ CHANGE
     public TaskResponseDTO patchDescription(
             String id,
             TaskDescriptionPatchDTO dto,
             String actingUserId) {
 
         Task task = getTaskOrThrow(id);
+
+        // ⭐ NEW
+        checkOwnershipOrAdmin(task);
 
         TaskMapper.updateDescription(task, dto);
 
@@ -312,7 +296,7 @@ public class TaskService {
     }
 
     // =====================================================
-    // USER QUERIES (N+1 OPTIMIZED)
+    // USER QUERIES
     // =====================================================
 
     public List<TaskResponseDTO> getTasksByUser(String userId) {
@@ -358,91 +342,46 @@ public class TaskService {
                 taskPage.isLast()
         );
     }
-    public List<TaskResponseDTO> filterTasksByUser(
-            String userId,
-            Boolean completed,
-            String keyword) {
-
-        log.info("Filtering tasks for userId: {}", userId);
-
-        validateUserExists(userId);
-
-        List<Task> tasks;
-
-        // ✅ Decision routing
-        if (completed != null && keyword != null && !keyword.isBlank()) {
-
-            tasks = repo
-                    .findByUserIdAndTitleContainingIgnoreCase(
-                            userId,
-                            keyword
-                    )
-                    .stream()
-                    .filter(task ->
-                            task.isCompleted() == completed)
-                    .toList();
-
-        }
-        else if (completed != null) {
-
-            tasks = repo.findByUserIdAndCompleted(
-                    userId,
-                    completed
-            );
-
-        }
-        else if (keyword != null && !keyword.isBlank()) {
-
-            tasks = repo
-                    .findByUserIdAndTitleContainingIgnoreCase(
-                            userId,
-                            keyword
-                    );
-        }
-        else {
-
-            tasks = repo.findByUserId(userId);
-        }
-
-        // ✅ IMPORTANT
-        // async enrichment prevents N+1 problem
-        return mapAndBatchEnrichAsync(tasks);
-    }
 
     // =====================================================
-    // PROJECTION (ALREADY OPTIMAL)
+    // SECURITY HELPERS ⭐
     // =====================================================
 
-    public List<TaskListProjection>
-    getTasksLightweightByUser(String userId) {
+    private String getCurrentUserEmail() {
 
-        validateUserExists(userId);
+        Authentication auth =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
 
-        return repo.findProjectedByUserId(userId);
+        return auth.getName();
     }
 
-    public PagedResponseDTO<TaskListProjection>
-    getTasksLightweightPagedByUser(
-            String userId,
-            int page,
-            int size) {
+    private boolean isAdmin(Authentication auth) {
 
-        validateUserExists(userId);
+        return auth.getAuthorities()
+                .stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(role -> role.equals("ROLE_ADMIN"));
+    }
 
-        Pageable pageable =
-                PageRequest.of(page, size);
+    private void checkOwnershipOrAdmin(Task task) {
 
-        Page<TaskListProjection> taskPage =
-                repo.findProjectedByUserId(
-                        userId, pageable);
+        Authentication auth =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
 
-        return new PagedResponseDTO<>(
-                taskPage.getContent(),
-                taskPage.getNumber(),
-                taskPage.getSize(),
-                taskPage.getTotalElements(),
-                taskPage.getTotalPages(),
-                taskPage.isLast()
-        );
+        String currentUserEmail = auth.getName();
+
+        boolean admin = isAdmin(auth);
+
+        boolean owner = task.getUserId()
+                .equals(currentUserEmail);
+
+        if (!owner && !admin) {
+            throw new AccessDeniedException(
+                    "You are not allowed to modify this task");
+        }
     }
 }
