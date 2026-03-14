@@ -158,25 +158,22 @@ public class TaskService {
     // CREATE
     // =====================================================
 
-    public TaskResponseDTO createTask(TaskRequestDTO dto) {
+    public TaskResponseDTO createTask(
+            String currentUserEmail,
+            TaskRequestDTO dto) {
 
-        // ⭐ CHANGE — use authenticated user, NOT DTO
-        String currentUserEmail = getCurrentUserEmail();
+        log.info("Creating task for authenticated user: {}",
+                currentUserEmail);
 
-        log.info("Creating task for authenticated user: {}", currentUserEmail);
-
-        // ⭐ CHANGE — validate using authenticated user
         validateUserExists(currentUserEmail);
 
         Task task = TaskMapper.fromCreateDTO(dto);
 
-        // ⭐ CRITICAL SECURITY CHANGE
-        // Never trust client userId
+        // ownership enforced here
         task.setUserId(currentUserEmail);
 
         return mapAndEnrich(repo.save(task));
     }
-
     // =====================================================
     // READ
     // =====================================================
@@ -383,5 +380,77 @@ public class TaskService {
             throw new AccessDeniedException(
                     "You are not allowed to modify this task");
         }
+    }
+    // =====================================================
+// FILTER (RESTORED FOR CONTROLLER)
+// =====================================================
+
+    public List<TaskResponseDTO> filterTasksByUser(
+            String userId,
+            Boolean completed,
+            String keyword) {
+
+        log.info("Filtering tasks for userId: {}", userId);
+
+        validateUserExists(userId);
+
+        List<Task> tasks;
+
+        if (completed != null && keyword != null && !keyword.isBlank()) {
+
+            tasks = repo
+                    .findByUserIdAndTitleContainingIgnoreCase(userId, keyword)
+                    .stream()
+                    .filter(task -> task.isCompleted() == completed)
+                    .toList();
+
+        } else if (completed != null) {
+
+            tasks = repo.findByUserIdAndCompleted(userId, completed);
+
+        } else if (keyword != null && !keyword.isBlank()) {
+
+            tasks = repo
+                    .findByUserIdAndTitleContainingIgnoreCase(userId, keyword);
+
+        } else {
+
+            tasks = repo.findByUserId(userId);
+        }
+
+        return mapAndBatchEnrichAsync(tasks);
+    }
+    // =====================================================
+// PROJECTION (RESTORED)
+// =====================================================
+
+    public List<TaskListProjection> getTasksLightweightByUser(String userId) {
+
+        validateUserExists(userId);
+
+        return repo.findProjectedByUserId(userId);
+    }
+
+    public PagedResponseDTO<TaskListProjection>
+    getTasksLightweightPagedByUser(
+            String userId,
+            int page,
+            int size) {
+
+        validateUserExists(userId);
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        Page<TaskListProjection> taskPage =
+                repo.findProjectedByUserId(userId, pageable);
+
+        return new PagedResponseDTO<>(
+                taskPage.getContent(),
+                taskPage.getNumber(),
+                taskPage.getSize(),
+                taskPage.getTotalElements(),
+                taskPage.getTotalPages(),
+                taskPage.isLast()
+        );
     }
 }

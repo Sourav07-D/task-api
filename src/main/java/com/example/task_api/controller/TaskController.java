@@ -3,9 +3,11 @@ package com.example.task_api.controller;
 import com.example.task_api.constants.ApiMessages;
 import com.example.task_api.dto.*;
 import com.example.task_api.repository.TaskListProjection;
+import com.example.task_api.security.CustomUserDetails;
 import com.example.task_api.service.TaskService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
@@ -22,9 +24,11 @@ public class TaskController {
     // ✅ Create
     @PostMapping
     public ResponseEntity<ApiResponse<TaskResponseDTO>> createTask(
-            @Valid @RequestBody TaskRequestDTO dto) {
+            @Valid @RequestBody TaskRequestDTO dto,
+            @AuthenticationPrincipal CustomUserDetails user) {
 
-        TaskResponseDTO response = service.createTask(dto);
+        TaskResponseDTO response =
+                service.createTask(user.getUsername(), dto);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.<TaskResponseDTO>builder()
