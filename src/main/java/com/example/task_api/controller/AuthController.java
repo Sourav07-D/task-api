@@ -35,4 +35,12 @@ public class AuthController {
 
         return ApiResponse.success(authService.login(dto));
     }
+    @PostMapping("/refresh")
+    public ApiResponse<LoginResponseDTO> refresh(
+            @RequestBody RefreshRequestDTO dto) {
+
+        return ApiResponse.success(
+                authService.refreshToken(dto)
+        );
+    }
 }

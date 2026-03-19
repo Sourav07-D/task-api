@@ -1,11 +1,13 @@
 package com.example.task_api.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.*;
 
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
+@Builder
 public class LoginResponseDTO {
 
-    private String token;
+    private String accessToken;
+    private String refreshToken;
 }
