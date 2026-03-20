@@ -43,4 +43,14 @@ public class AuthController {
                 authService.refreshToken(dto)
         );
     }
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<String>> logout(
+            @RequestBody RefreshRequestDTO request) {
+
+        authService.logout(request.getRefreshToken());
+
+        return ResponseEntity.ok(
+                ApiResponse.success("Logged out successfully")
+        );
+    }
 }

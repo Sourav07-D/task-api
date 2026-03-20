@@ -67,4 +67,11 @@ public class RefreshTokenService {
     public void deleteByUser(String userEmail) {
         repo.deleteByUserEmail(userEmail);
     }
+    public void revokeByToken(String token) {
+        repo.deleteByToken(token);
+    }
+
+    public void revokeAllByUser(String email) {
+        repo.deleteByUserEmail(email);
+    }
 }
