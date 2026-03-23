@@ -1,5 +1,7 @@
 package com.example.task_api.config;
 
+import com.example.task_api.security.CustomAccessDeniedHandler;
+import com.example.task_api.security.CustomAuthenticationEntryPoint;
 import com.example.task_api.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 
@@ -28,6 +30,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
+    private final CustomAuthenticationEntryPoint authenticationEntryPoint;
+    private final CustomAccessDeniedHandler accessDeniedHandler;
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -44,6 +48,11 @@ public class SecurityConfig {
 
                 .addFilterBefore(jwtFilter,
                         UsernamePasswordAuthenticationFilter.class);
+        http
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                );
 
         return http.build();
     }
